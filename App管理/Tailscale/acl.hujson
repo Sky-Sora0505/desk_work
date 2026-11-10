@@ -1,0 +1,33 @@
+// Tailscale の ACL の控え。正は管理画面（アクセス制御 → JSONエディタ）。変えたら、ここも直す。
+{
+	"tagOwners": {
+		"tag:server": ["autogroup:admin"],
+	},
+
+	"grants": [
+		{
+			"src": ["autogroup:owner"],
+			"dst": ["tag:server"],
+			"ip": [
+				"tcp:22",
+				"tcp:443",
+				"tcp:2283",
+				"tcp:3000",
+				"tcp:8081",
+				"tcp:8082",
+				"tcp:8083",
+				"tcp:8084",
+				"tcp:8090",
+			],
+		},
+	],
+
+	"ssh": [
+		{
+			"action": "check",
+			"src":    ["autogroup:owner"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot"],
+		},
+	],
+}

@@ -1,0 +1,24 @@
+# 実際の値（IP など）。公開しない
+tools/values.local
+_実機用/
+
+# 秘密情報
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_ed25519*
+
+# 利用者データ
+*.db
+*.db-shm
+*.db-wal
+
+# ビルド物と依存物
+node_modules/
+target/
+
+# その他
+.DS_Store
+.claude/settings.local.json

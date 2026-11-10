@@ -1,0 +1,15 @@
+- ツール:
+    - 動作確認:
+        href: http://100.x.y.z:8081/hello/
+        description: 倉庫の動作確認ページ
+        icon: mdi-check-circle
+
+- 学習:
+    - Java Silver 17 ドリル:
+        href: http://100.x.y.z:8081/java-silver17/
+        description: 416問・8章（進捗はサーバー保存）
+        icon: mdi-language-java
+    - My辞書:
+        href: http://100.x.y.z:8081/my-dictionary/
+        description: 検索エンジン付きの自分専用辞書
+        icon: mdi-book-open-variant

@@ -1,0 +1,60 @@
+services:
+  apps:
+    image: nginxinc/nginx-unprivileged:1.30.5-alpine3.24
+    container_name: apps-static
+    restart: unless-stopped
+    depends_on:
+      - kvstore
+    ports:
+      - "100.x.y.z:8081:8080"
+    volumes:
+      - /Users/youruser/server/data/apps/static:/usr/share/nginx/html:ro
+      - /Users/youruser/server/apps/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+  kvstore:
+    build: ./kvstore
+    image: local/kvstore:1.0.0
+    container_name: apps-kvstore
+    restart: unless-stopped
+    user: "501:20"
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      TZ: Asia/Tokyo
+      KV_PORT: "8080"
+      KV_DB_PATH: /data/kvstore.db
+      KV_MAX_VALUE_BYTES: "8388608"
+      KV_HISTORY_LIMIT: "30"
+      KV_BACKUP_DIR: /data/backup
+      KV_BACKUP_KEEP: "10"
+      KV_ERROR_DETAIL: "false"
+    volumes:
+      - /Users/youruser/server/data/kvstore:/data
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/8080
+          && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3
+          && grep -q '"ok":true' <&3
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  dictionary:
+    build: ./my-dictionary
+    image: local/my-dictionary:1.0.0
+    container_name: apps-dictionary
+    restart: unless-stopped
+    user: "501:20"
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      TZ: Asia/Tokyo
+    volumes:
+      - /Users/youruser/server/data/dictionary:/data

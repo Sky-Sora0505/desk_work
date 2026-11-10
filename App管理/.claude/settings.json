@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash tools/sync.sh check)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(docker ps *)",
+      "Bash(docker compose logs *)",
+      "Bash(docker compose config *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(bash tools/sync.sh import)",
+      "Bash(bash tools/sync.sh fill)",
+      "Bash(docker compose up *)",
+      "Bash(docker compose down *)",
+      "Bash(docker compose build *)"
+    ],
+    "deny": [
+      "Read(./tools/values.local)",
+      "Read(./**/.env)",
+      "Bash(sudo *)",
+      "Bash(rm -rf *)",
+      "Bash(docker system prune *)",
+      "Bash(docker volume rm *)",
+      "Bash(docker compose down -v*)",
+      "Bash(tailscale funnel *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)"
+    ]
+  }
+}

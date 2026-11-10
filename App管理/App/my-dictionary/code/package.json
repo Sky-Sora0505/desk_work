@@ -1,0 +1,14 @@
+{
+  "name": "my-dictionary",
+  "version": "1.0.0",
+  "description": "スマホ向け 検索エンジン付き辞書アプリ（Node.js + SQLite, 依存パッケージなし）",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js"
+  },
+  "license": "MIT"
+}
