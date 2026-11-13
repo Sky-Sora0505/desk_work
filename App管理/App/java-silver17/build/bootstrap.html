@@ -1,0 +1,182 @@
+<script>
+/* ============================================================
+   サーバー保存ブート（倉庫サーバー用に追加）
+   アプリ本体のコードは一切変更していない。
+   localStorage の読み書きだけを KVストア（/api/kv/）に差し替え、
+   iPhone と Mac で同じ進捗を共有する。
+
+   データを守る仕組み:
+     1. 起動時にサーバーから読めなかったら、以降の保存を止める
+     2. 他の端末が先に更新していたら（409）、保存を止めて再読み込みを促す
+     3. 画面に戻ったとき、他の端末での更新がないか確認する
+   ============================================================ */
+(function () {
+  var API = '/api/kv/';
+  var KEY_MAIN = 'jsilver17_v1';
+  var KEY_UI = KEY_MAIN + '_ui';
+  var KEYS = [KEY_MAIN, KEY_UI];
+
+  var cache = {};     // キー → 値（文字列）
+  var rev = {};       // キー → リビジョン番号（0 は未保存）
+  var timer = {};     // キー → 書き込みをまとめるタイマー
+  var blocked = null; // 保存を止めた理由（null なら正常）
+
+  /* ---- 画面下部のお知らせ ---- */
+  var box = null;
+  function notice(title, message, info) {
+    if (box) box.remove();
+    info = info || {};
+    box = document.createElement('div');
+    box.setAttribute('role', 'alert');
+    box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:2147483647;background:#FFF1F1;border:2px solid #E5484D;border-radius:12px;padding:12px 14px;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;color:#1F2328;box-shadow:0 6px 24px rgba(0,0,0,.18)';
+    var t = document.createElement('div');
+    t.style.cssText = 'font-weight:700;color:#B42318;margin-bottom:4px';
+    t.textContent = title;
+    var m = document.createElement('div');
+    m.textContent = message;
+    box.appendChild(t);
+    box.appendChild(m);
+    var meta = [];
+    if (info.code) meta.push('エラーコード: ' + info.code);
+    if (info.where) meta.push('発生箇所: ' + info.where);
+    if (info.errorId && info.errorId !== '-') meta.push('エラーID: ' + info.errorId);
+    if (meta.length) {
+      var s = document.createElement('div');
+      s.style.cssText = 'font-size:12px;color:#57606A;margin-top:6px;word-break:break-all';
+      s.textContent = meta.join(' ／ ');
+      box.appendChild(s);
+    }
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;margin-top:10px;justify-content:flex-end';
+    row.appendChild(button('閉じる', false, function () { box.remove(); box = null; }));
+    row.appendChild(button('再読み込み', true, function () { location.reload(); }));
+    box.appendChild(row);
+    document.body.appendChild(box);
+  }
+  function button(label, primary, fn) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.style.cssText = 'padding:8px 14px;border-radius:8px;font:600 14px -apple-system,sans-serif;cursor:pointer;' +
+      (primary ? 'border:none;background:#E5484D;color:#fff' : 'border:1px solid #D0D7DE;background:#fff;color:#1F2328');
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function url(k) { return API + encodeURIComponent(k); }
+
+  /* ---- 読み込み ---- */
+  function load(k) {
+    return fetch(url(k), { cache: 'no-store' }).then(function (r) {
+      if (r.status === 404) { cache[k] = null; rev[k] = 0; return; }   // 未保存は正常
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json().then(function (j) {
+        if (!j || j.ok !== true) throw new Error('想定外の応答');
+        cache[k] = j.data.value;
+        rev[k] = j.data.revision;
+      });
+    });
+  }
+
+  /* ---- 保存 ---- */
+  function push(k, keepalive) {
+    if (blocked) return Promise.resolve();
+    var opt = {
+      method: 'PUT',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Expected-Revision': String(rev[k] || 0) },
+      body: cache[k] == null ? '' : cache[k]
+    };
+    if (keepalive) opt.keepalive = true;
+    return fetch(url(k), opt).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (r.ok && j && j.ok === true) { rev[k] = j.data.revision; return; }
+        var e = (j && j.error) || {};
+        if (r.status === 409) {
+          blocked = e;
+          notice('他の端末で更新されています',
+            e.message || '他の端末で先に更新されています。再読み込みしてから続けてください', e);
+        } else {
+          notice('保存できませんでした', e.message || ('サーバーが HTTP ' + r.status + ' を返しました'), e);
+        }
+      });
+    }).catch(function () {
+      notice('保存できませんでした',
+        'サーバーに接続できません。Tailscale がオンになっているか確認してください', { code: 'KV-CL-02' });
+    });
+  }
+
+  function schedule(k) {
+    clearTimeout(timer[k]);
+    timer[k] = setTimeout(function () { push(k, false); }, 400);
+  }
+
+  function flush(keepalive) {
+    KEYS.forEach(function (k) {
+      if (timer[k]) { clearTimeout(timer[k]); timer[k] = 0; push(k, keepalive); }
+    });
+  }
+
+  /* ---- アプリに渡す localStorage の代わり ---- */
+  var shim = {
+    getItem: function (k) {
+      return Object.prototype.hasOwnProperty.call(cache, k) ? cache[k] : null;
+    },
+    setItem: function (k, v) {
+      v = String(v);
+      cache[k] = v;
+      if (blocked) {
+        notice('保存を停止しています',
+          'データを守るため保存を止めています。再読み込みしてから続けてください（原因: ' +
+          (blocked.code || '不明') + '）', { code: 'KV-CL-04' });
+        return;
+      }
+      schedule(k);
+    },
+    removeItem: function (k) { cache[k] = null; if (!blocked) schedule(k); },
+    clear: function () { KEYS.forEach(function (k) { cache[k] = null; }); if (!blocked) KEYS.forEach(schedule); },
+    key: function (i) { return KEYS[i] || null; },
+    get length() { return KEYS.length; }
+  };
+
+  /* ---- 画面に戻ったときの更新チェック ---- */
+  var hiddenAt = 0;
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { hiddenAt = Date.now(); flush(true); return; }
+    if (blocked || !hiddenAt || Date.now() - hiddenAt < 30000) return;
+    Promise.all(KEYS.map(function (k) {
+      return fetch(url(k) + '/meta', { cache: 'no-store' }).then(function (r) {
+        if (r.status === 404) return 0;
+        if (!r.ok) return rev[k];
+        return r.json().then(function (j) { return (j && j.ok) ? j.data.revision : rev[k]; });
+      });
+    })).then(function (list) {
+      for (var i = 0; i < KEYS.length; i++) {
+        if (list[i] !== (rev[KEYS[i]] || 0)) {
+          blocked = { code: 'KV-CL-05' };
+          notice('他の端末で更新されています',
+            '他の端末で進捗が更新されています。再読み込みして最新の状態から続けてください',
+            { code: 'KV-CL-05', where: '画面側（更新チェック）' });
+          return;
+        }
+      }
+    }).catch(function () { /* 通信できないときは次の保存時に分かる */ });
+  });
+  window.addEventListener('pagehide', function () { flush(true); });
+
+  /* ---- 読み込みが終わってからアプリ本体を動かす ---- */
+  function run() {
+    var src = document.getElementById('__appsrc');
+    if (!src) return;
+    new Function('localStorage', src.textContent)(shim);
+  }
+
+  Promise.all(KEYS.map(load)).then(run).catch(function (e) {
+    blocked = { code: 'KV-CL-02' };
+    KEYS.forEach(function (k) { if (!(k in cache)) { cache[k] = null; rev[k] = 0; } });
+    run();
+    notice('進捗を読み込めませんでした',
+      'この状態で解いた結果は保存されません。サーバーの状態を確認して再読み込みしてください（' + e.message + '）',
+      { code: 'KV-CL-02', where: '画面側（起動時の読み込み）' });
+  });
+})();
+</script>

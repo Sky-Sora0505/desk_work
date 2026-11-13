@@ -1,0 +1,10 @@
+# 実際の値を書くファイルのひな形。
+# 使い方: このファイルを values.local という名前でコピーし、右側を自分の値に書き換える。
+# values.local は .gitignore に入っているので、GitHub には上がらない。
+# 値の調べ方は 設定値.md を参照。
+
+TS_IP=100.x.y.z
+TAILNET=your-tailnet
+DEVICE=your-mac
+MAC_USER=youruser
+MAC_HOSTNAME=Your-Mac

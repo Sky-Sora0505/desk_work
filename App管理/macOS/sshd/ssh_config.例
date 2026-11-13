@@ -1,0 +1,6 @@
+# 接続元の Mac の ~/.ssh/config に足す（権限 600）
+Host skymac
+    HostName your-mac.your-tailnet.ts.net
+    User youruser
+    IdentityFile ~/.ssh/id_ed25519_server
+    IdentitiesOnly yes

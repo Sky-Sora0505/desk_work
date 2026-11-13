@@ -1,0 +1,13 @@
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:v2.4.0
+    container_name: homepage
+    restart: unless-stopped
+    ports:
+      - "100.x.y.z:3000:3000"
+    volumes:
+      - /Users/youruser/server/homepage/config:/app/config
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: "100.x.y.z:3000,your-mac.your-tailnet.ts.net"
+      PUID: 501
+      PGID: 20
